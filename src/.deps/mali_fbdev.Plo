@@ -111,7 +111,7 @@ mali_fbdev.lo: mali_fbdev.c /usr/include/stdc-predef.h ../config.h \
  /usr/include/inttypes.h /usr/include/xorg/propertyst.h \
  /usr/include/xorg/property.h /usr/include/pciaccess.h \
  /usr/include/xorg/xf86cmap.h /usr/include/xf86drm.h \
- /usr/include/drm/drm.h /usr/include/drm/drm_mode.h \
+ /usr/include/libdrm/drm.h /usr/include/libdrm/drm_mode.h \
  /usr/include/xorg/xf86xv.h /usr/include/xorg/xvdix.h \
  /usr/include/X11/extensions/Xvproto.h /usr/include/xorg/xf86Crtc.h \
  /usr/include/xorg/edid.h /usr/include/xorg/randrstr.h \
@@ -503,9 +503,9 @@ mali_fbdev.lo: mali_fbdev.c /usr/include/stdc-predef.h ../config.h \
 
 /usr/include/xf86drm.h:
 
-/usr/include/drm/drm.h:
+/usr/include/libdrm/drm.h:
 
-/usr/include/drm/drm_mode.h:
+/usr/include/libdrm/drm_mode.h:
 
 /usr/include/xorg/xf86xv.h:
 

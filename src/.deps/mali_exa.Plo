@@ -140,7 +140,8 @@ mali_exa.lo: mali_exa.c /usr/include/stdc-predef.h /usr/include/stdio.h \
  /usr/include/xorg/migc.h /usr/include/xorg/fbrop.h \
  /usr/include/xorg/micoord.h mali_exa.h /usr/include/ump/ump.h \
  /usr/include/ump/ump_platform.h /usr/include/ump/ump_ref_drv.h \
- /usr/include/ump/ump.h /usr/include/umplock/umplock_ioctl.h
+ /usr/include/ump/ump.h /usr/include/umplock/umplock_ioctl.h ge2d.h \
+ ge2d_cmd.h
 
 /usr/include/stdc-predef.h:
 
@@ -567,3 +568,7 @@ mali_exa.h:
 /usr/include/ump/ump.h:
 
 /usr/include/umplock/umplock_ioctl.h:
+
+ge2d.h:
+
+ge2d_cmd.h:

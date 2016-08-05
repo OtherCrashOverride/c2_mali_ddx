@@ -100,14 +100,14 @@ mali_dri.lo: mali_dri.c /usr/include/stdc-predef.h ../config.h \
  /usr/include/xorg/xf86Optionstr.h /usr/include/xorg/displaymode.h \
  /usr/include/inttypes.h /usr/include/xorg/propertyst.h \
  /usr/include/xorg/property.h /usr/include/pciaccess.h \
- /usr/include/xf86drm.h /usr/include/drm/drm.h /usr/include/linux/types.h \
- /usr/include/aarch64-linux-gnu/asm/types.h \
+ /usr/include/xf86drm.h /usr/include/libdrm/drm.h \
+ /usr/include/linux/types.h /usr/include/aarch64-linux-gnu/asm/types.h \
  /usr/include/asm-generic/types.h /usr/include/asm-generic/int-ll64.h \
  /usr/include/aarch64-linux-gnu/asm/bitsperlong.h \
  /usr/include/asm-generic/bitsperlong.h /usr/include/linux/posix_types.h \
  /usr/include/linux/stddef.h \
  /usr/include/aarch64-linux-gnu/asm/posix_types.h \
- /usr/include/asm-generic/posix_types.h /usr/include/drm/drm_mode.h \
+ /usr/include/asm-generic/posix_types.h /usr/include/libdrm/drm_mode.h \
  /usr/include/xorg/dri2.h /usr/include/X11/extensions/dri2tokens.h \
  /usr/include/xorg/damage.h mali_def.h mali_fbdev.h \
  /usr/include/linux/fb.h /usr/include/linux/i2c.h /usr/include/xorg/exa.h \
@@ -462,7 +462,7 @@ mali_dri.lo: mali_dri.c /usr/include/stdc-predef.h ../config.h \
 
 /usr/include/xf86drm.h:
 
-/usr/include/drm/drm.h:
+/usr/include/libdrm/drm.h:
 
 /usr/include/linux/types.h:
 
@@ -484,7 +484,7 @@ mali_dri.lo: mali_dri.c /usr/include/stdc-predef.h ../config.h \
 
 /usr/include/asm-generic/posix_types.h:
 
-/usr/include/drm/drm_mode.h:
+/usr/include/libdrm/drm_mode.h:
 
 /usr/include/xorg/dri2.h:
 

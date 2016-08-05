@@ -34,9 +34,26 @@
 #include "mali_fbdev.h"
 #include "mali_exa.h"
 #include "umplock/umplock_ioctl.h"
+#include <linux/fb.h>
+#include "ge2d.h"
+#include "ge2d_cmd.h"
 
 #define MALI_EXA_FUNC(s) exa->s = mali ## s
 #define MALI_ALIGN( value, base ) (((value) + ((base) - 1)) & ~((base) - 1))
+
+
+static int ge2d_fd = -1;
+static PixmapPtr SrcPixmap = 0;
+
+static void init_ge2d()
+{
+	ge2d_fd = open("/dev/ge2d", O_RDWR);
+
+	if (ge2d_fd < 0)
+	{
+		ERROR_STR("Can't open /dev/ge2d\n");
+	}
+}
 
 static Bool maliPrepareSolid(PixmapPtr pPixmap, int alu, Pixel planemask, Pixel fg)
 {
@@ -64,6 +81,9 @@ static void maliDoneSolid(PixmapPtr pPixmap)
 
 static Bool maliPrepareCopy(PixmapPtr pSrcPixmap, PixmapPtr pDstPixmap, int xdir, int ydir, int alu, Pixel planemask)
 {
+	PrivPixmap *srcPrivPixmap = (PrivPixmap *)exaGetPixmapDriverPrivate(pSrcPixmap);
+	PrivPixmap *dstPrivPixmap = (PrivPixmap *)exaGetPixmapDriverPrivate(pDstPixmap);
+
 	IGNORE(pSrcPixmap);
 	IGNORE(pDstPixmap);
 	IGNORE(xdir);
@@ -71,11 +91,38 @@ static Bool maliPrepareCopy(PixmapPtr pSrcPixmap, PixmapPtr pDstPixmap, int xdir
 	IGNORE(alu);
 	IGNORE(planemask);
 
+	if (srcPrivPixmap->isFrameBuffer &&
+		dstPrivPixmap->isFrameBuffer)
+	{
+		if (srcPrivPixmap->frameBufferNumber != 0 ||
+			srcPrivPixmap->frameBufferNumber != 0)
+		{
+			ERROR_STR("%s: pSrcPixmap=%p (buffer# %d) pDstPixmap=%p (buffer# %d) xdir=%d ydir=%d alu=%x\n",
+				__FUNCTION__, pSrcPixmap, srcPrivPixmap->frameBufferNumber, pDstPixmap, dstPrivPixmap->frameBufferNumber, xdir, ydir, alu);
+		}
+
+		SrcPixmap = pSrcPixmap;
+
+		if (ge2d_fd < 0)
+		{
+			init_ge2d();
+		}
+
+
+
+
+		return TRUE;
+	}
+
 	return FALSE;
 }
 
 static void maliCopy(PixmapPtr pDstPixmap, int srcX, int srcY, int dstX, int dstY, int width, int height)
 {
+	PrivPixmap *srcPrivPixmap = (PrivPixmap *)exaGetPixmapDriverPrivate(SrcPixmap);
+	PrivPixmap *dstPrivPixmap = (PrivPixmap *)exaGetPixmapDriverPrivate(pDstPixmap);
+
+
 	IGNORE(pDstPixmap);
 	IGNORE(srcX);
 	IGNORE(srcY);
@@ -83,6 +130,98 @@ static void maliCopy(PixmapPtr pDstPixmap, int srcX, int srcY, int dstX, int dst
 	IGNORE(dstY);
 	IGNORE(width);
 	IGNORE(height);
+
+
+	//ERROR_STR("%s: pDstPixmap=%p srcX=%d srcY=%d dstX=%d dstY=%d width=%d height=%d\n",
+	//	__FUNCTION__, pDstPixmap, srcX, srcY, dstX, dstY, width, height);
+
+
+	ScreenPtr pScreen = SrcPixmap->drawable.pScreen;
+	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	MaliPtr fPtr = MALIPTR(pScrn);
+
+	struct fb_var_screeninfo var_info;
+	int ret = ioctl(fPtr->fb_lcd_fd, FBIOGET_VSCREENINFO, &var_info);
+	if (ret < 0)
+	{
+		ERROR_STR("FBIOGET_VSCREENINFO failed.\n");
+	}
+
+
+	unsigned char revX = 0;
+	unsigned char revY = 0;
+
+	if (dstY > srcY)
+	{
+		revY = 1;
+	}
+
+	if (dstX > srcX)
+	{
+		revX = 1;
+	}
+
+	if (srcPrivPixmap->frameBufferNumber != 0)
+	{
+		srcY += (var_info.yres * srcPrivPixmap->frameBufferNumber);
+	}
+
+	if (dstPrivPixmap->frameBufferNumber != 0)
+	{
+		dstY += (var_info.yres * dstPrivPixmap->frameBufferNumber);
+	}
+
+
+	// Configure GE2D
+	struct config_para_ex_s configex;
+	memset(&configex, 0x00, sizeof(configex));
+
+	configex.src_para.mem_type = CANVAS_OSD0;
+	configex.src_para.left = 0;
+	configex.src_para.top = 0;
+	configex.src_para.width = var_info.xres;
+	configex.src_para.height = var_info.yres * 2;	// double buffer
+	configex.src_para.x_rev = revX;
+	configex.src_para.y_rev = revY;
+
+	configex.src2_para.mem_type = CANVAS_TYPE_INVALID;
+
+	configex.dst_para.mem_type = CANVAS_OSD0;
+	configex.dst_para.left = 0;
+	configex.dst_para.top = 0;
+	configex.dst_para.width = configex.src_para.width;
+	configex.dst_para.height = configex.src_para.height;
+	configex.dst_para.x_rev = configex.src_para.x_rev;
+	configex.dst_para.y_rev = configex.src_para.y_rev;
+
+
+	ret = ioctl(ge2d_fd, GE2D_CONFIG_EX, &configex);
+	if (ret < 0)
+	{
+		ERROR_STR("GE2D_CONFIG_EX failed.\n");
+	}
+
+	// Perform the blit operation
+	struct ge2d_para_s blitRect;
+	memset(&blitRect, 0, sizeof(blitRect));
+
+	blitRect.src1_rect.x = srcX;
+	blitRect.src1_rect.y = srcY;
+	blitRect.src1_rect.w = width;
+	blitRect.src1_rect.h = height;
+	blitRect.dst_rect.x = dstX;
+	blitRect.dst_rect.y = dstY;
+
+	if (revY) // && height > 1
+	{
+		blitRect.src1_rect.y -= 1;
+	}
+
+	ret = ioctl(ge2d_fd, GE2D_BLIT, &blitRect);
+	if (ret < 0)
+	{
+		ERROR_STR("GE2D_BLIT failed.\n");
+	}
 }
 
 static void maliDoneCopy(PixmapPtr pDstPixmap)
@@ -160,6 +299,7 @@ static Bool maliModifyPixmapHeader(PixmapPtr pPixmap, int width, int height, int
 		ump_secure_id ump_id = UMP_INVALID_SECURE_ID;
 
 		privPixmap->isFrameBuffer = TRUE;
+		privPixmap->frameBufferNumber = current_buf;
 		mem_info = privPixmap->mem_info;
 
 		if (mem_info)

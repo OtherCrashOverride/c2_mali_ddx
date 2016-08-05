@@ -53,6 +53,7 @@ typedef struct
 	unsigned long addr;
 	mali_mem_info *mem_info;
 	PrivBuffer *buf_info;
+	int frameBufferNumber;
 } PrivPixmap;
 
 extern Bool maliSetupExa(ScreenPtr pScreen, ExaDriverPtr exa);
