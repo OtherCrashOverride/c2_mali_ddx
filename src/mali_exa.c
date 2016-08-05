@@ -44,14 +44,33 @@
 
 static int ge2d_fd = -1;
 static PixmapPtr SrcPixmap = 0;
+static int memclient_fd = -1;
+
+typedef struct
+{
+	int handle;
+	int _padding00;
+	unsigned long physical_address;
+	unsigned int length;
+} memclient_attach_dmabuf_param_t;
+
+#define MEMCLIENT_ATTACH_UMP		_IOWR('M', 0x03, memclient_attach_dmabuf_param_t)
+#define MEMCLIENT_RELEASE_UMP		_IOWR('M', 0x04, int)
+
 
 static void init_ge2d()
 {
 	ge2d_fd = open("/dev/ge2d", O_RDWR);
-
 	if (ge2d_fd < 0)
 	{
 		ERROR_STR("Can't open /dev/ge2d\n");
+	}
+
+
+	memclient_fd = open("/dev/memclient", O_RDWR);
+	if (memclient_fd < 0)
+	{
+		ERROR_STR("Can't open /dev/memclient\n");
 	}
 }
 
@@ -94,12 +113,12 @@ static Bool maliPrepareCopy(PixmapPtr pSrcPixmap, PixmapPtr pDstPixmap, int xdir
 	if (srcPrivPixmap->isFrameBuffer &&
 		dstPrivPixmap->isFrameBuffer)
 	{
-		if (srcPrivPixmap->frameBufferNumber != 0 ||
-			srcPrivPixmap->frameBufferNumber != 0)
-		{
-			ERROR_STR("%s: pSrcPixmap=%p (buffer# %d) pDstPixmap=%p (buffer# %d) xdir=%d ydir=%d alu=%x\n",
-				__FUNCTION__, pSrcPixmap, srcPrivPixmap->frameBufferNumber, pDstPixmap, dstPrivPixmap->frameBufferNumber, xdir, ydir, alu);
-		}
+		//if (srcPrivPixmap->frameBufferNumber != 0 ||
+		//	srcPrivPixmap->frameBufferNumber != 0)
+		//{
+		//	ERROR_STR("%s: pSrcPixmap=%p (buffer# %d) pDstPixmap=%p (buffer# %d) xdir=%d ydir=%d alu=%x\n",
+		//		__FUNCTION__, pSrcPixmap, srcPrivPixmap->frameBufferNumber, pDstPixmap, dstPrivPixmap->frameBufferNumber, xdir, ydir, alu);
+		//}
 
 		SrcPixmap = pSrcPixmap;
 
@@ -109,10 +128,25 @@ static Bool maliPrepareCopy(PixmapPtr pSrcPixmap, PixmapPtr pDstPixmap, int xdir
 		}
 
 
-
-
 		return TRUE;
 	}
+
+	//if (srcPrivPixmap->mem_info &&
+	//	dstPrivPixmap->mem_info)
+	//{
+	//	//if (srcPrivPixmap->mem_info->handle != UMP_INVALID_SECURE_ID &&
+	//	//	dstPrivPixmap->mem_info->handle != UMP_INVALID_SECURE_ID)
+	//	{
+	//		SrcPixmap = pSrcPixmap;
+
+	//		if (ge2d_fd < 0)
+	//		{
+	//			init_ge2d();
+	//		}
+
+	//		return TRUE;
+	//	}
+	//}
 
 	return FALSE;
 }
@@ -161,38 +195,70 @@ static void maliCopy(PixmapPtr pDstPixmap, int srcX, int srcY, int dstX, int dst
 		revX = 1;
 	}
 
-	if (srcPrivPixmap->frameBufferNumber != 0)
+	//if (srcPrivPixmap->frameBufferNumber != 0)
+	//{
+	//	srcY += (var_info.yres * srcPrivPixmap->frameBufferNumber);
+	//}
+
+	//if (dstPrivPixmap->frameBufferNumber != 0)
+	//{
+	//	dstY += (var_info.yres * dstPrivPixmap->frameBufferNumber);
+	//}
+
+	ump_secure_id srcID = ump_secure_id_get(srcPrivPixmap->mem_info->handle);
+
+	memclient_attach_dmabuf_param_t srcParam;
+	srcParam.handle = srcID;
+	ret = ioctl(memclient_fd, MEMCLIENT_ATTACH_UMP, &srcParam);
+	if (ret < 0)
 	{
-		srcY += (var_info.yres * srcPrivPixmap->frameBufferNumber);
+		ERROR_STR("srcParam MEMCLIENT_ATTACH_UMP failed.\n");
 	}
 
-	if (dstPrivPixmap->frameBufferNumber != 0)
+
+	ump_secure_id dstID = ump_secure_id_get(dstPrivPixmap->mem_info->handle);
+
+	memclient_attach_dmabuf_param_t dstParam;
+	dstParam.handle = dstID;
+	ret = ioctl(memclient_fd, MEMCLIENT_ATTACH_UMP, &dstParam);
+	if (ret < 0)
 	{
-		dstY += (var_info.yres * dstPrivPixmap->frameBufferNumber);
+		ERROR_STR("dstParam MEMCLIENT_ATTACH_UMP failed.\n");
 	}
+
 
 
 	// Configure GE2D
 	struct config_para_ex_s configex;
 	memset(&configex, 0x00, sizeof(configex));
 
-	configex.src_para.mem_type = CANVAS_OSD0;
+	configex.src_para.mem_type = CANVAS_ALLOC;	//CANVAS_OSD0
 	configex.src_para.left = 0;
 	configex.src_para.top = 0;
 	configex.src_para.width = var_info.xres;
-	configex.src_para.height = var_info.yres * 2;	// double buffer
+	configex.src_para.height = var_info.yres;
 	configex.src_para.x_rev = revX;
 	configex.src_para.y_rev = revY;
+	configex.src_planes[0].addr = srcParam.physical_address;
+	configex.src_planes[0].w = configex.src_para.width;
+	configex.src_planes[0].h = configex.src_para.height;
+	configex.src_para.format = GE2D_FORMAT_S32_ARGB; // GE2D_FORMAT_S32_BGRA; // GE2D_FMT_S32_RGBA;
+
 
 	configex.src2_para.mem_type = CANVAS_TYPE_INVALID;
 
-	configex.dst_para.mem_type = CANVAS_OSD0;
+
+	configex.dst_para.mem_type = CANVAS_ALLOC; // CANVAS_OSD0;
 	configex.dst_para.left = 0;
 	configex.dst_para.top = 0;
 	configex.dst_para.width = configex.src_para.width;
 	configex.dst_para.height = configex.src_para.height;
 	configex.dst_para.x_rev = configex.src_para.x_rev;
 	configex.dst_para.y_rev = configex.src_para.y_rev;
+	configex.dst_planes[0].addr = dstParam.physical_address;
+	configex.dst_planes[0].w = configex.dst_para.width;
+	configex.dst_planes[0].h = configex.dst_para.height;
+	configex.dst_para.format = GE2D_FORMAT_S32_ARGB;
 
 
 	ret = ioctl(ge2d_fd, GE2D_CONFIG_EX, &configex);
@@ -222,6 +288,20 @@ static void maliCopy(PixmapPtr pDstPixmap, int srcX, int srcY, int dstX, int dst
 	{
 		ERROR_STR("GE2D_BLIT failed.\n");
 	}
+
+
+	ret = ioctl(memclient_fd, MEMCLIENT_RELEASE_UMP, dstID);
+	if (ret < 0)
+	{
+		ERROR_STR("dstID MEMCLIENT_RELEASE_UMP failed.\n");
+	}
+
+	ret = ioctl(memclient_fd, MEMCLIENT_RELEASE_UMP, srcID);
+	if (ret < 0)
+	{
+		ERROR_STR("srcID MEMCLIENT_RELEASE_UMP failed.\n");
+	}
+
 }
 
 static void maliDoneCopy(PixmapPtr pDstPixmap)
